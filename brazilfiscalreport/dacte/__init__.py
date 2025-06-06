@@ -4,8 +4,10 @@ from .config import (
     FontType,
     Margins,
     ReceiptPosition,
+    ModalType,
 )
 from .dacte import Dacte
+from .dacteos import DacteOS
 
 __all__ = [
     "Dacte",
@@ -15,4 +17,5 @@ __all__ = [
     "Margins",
     "ReceiptPosition",
     "ModalType",
+    "DacteOS"
 ]

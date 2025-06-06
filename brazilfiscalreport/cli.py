@@ -4,6 +4,8 @@ import click
 import yaml
 
 from brazilfiscalreport import __version__
+from brazilfiscalreport.dacte import DacteConfig, Margins
+from brazilfiscalreport.dacte.dacteos import DacteOS
 
 
 def load_config():
@@ -185,6 +187,34 @@ def generate_damdfe(xml):
     damdfe_instance = damdfe.Damdfe(xml=xml_content, config=config)
     damdfe_instance.output(output_path)
     click.echo(f"DAMDFE generated successfully: {output_path}")
+
+
+@cli.command("dacteos")
+@click.argument("xml", type=click.Path(exists=True))
+def generate_dacte_os(xml):
+    config_data = load_config()
+    logo = config_data.get("LOGO")
+    top = config_data.get("TOP_MARGIN", DacteConfig.margins.top)
+    right = config_data.get("RIGHT_MARGIN", DacteConfig.margins.right)
+    bottom = config_data.get("BOTTOM_MARGIN", DacteConfig.margins.bottom)
+    left = config_data.get("LEFT_MARGIN", DacteConfig.margins.left)
+
+    xml_path = Path(xml).resolve()
+    output_path = Path.cwd() / xml_path.stem
+    output_path = output_path.with_suffix(".pdf")
+    logo_path = Path(logo).resolve() if logo else None
+
+    if logo_path and not logo_path.exists():
+        click.echo("Logo file not found, proceeding without logo.")
+        logo_path = None
+
+    with open(xml_path, encoding="utf-8") as xml_file:
+        xml_content = xml_file.read()
+
+    config = DacteConfig(margins=Margins(top=top, right=right, bottom=bottom, left=left), logo=logo_path)
+    dacte_os_instance = DacteOS(xml_content=xml_content, config=config)
+    dacte_os_instance.output(output_path)
+    click.echo(f"DACTE OS generated successfully: {output_path}")
 
 
 if __name__ == "__main__":
