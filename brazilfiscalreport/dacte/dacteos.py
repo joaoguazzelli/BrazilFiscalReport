@@ -1,10 +1,21 @@
-import xml.etree.ElementTree as ET
 import re
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from datetime import datetime
 
 from reportlab.lib.units import mm
 
-from brazilfiscalreport.xfpdf import xFPDF
+from brazilfiscalreport.dacte.config import DacteConfig, ReceiptPosition
+from brazilfiscalreport.dacte.dacte_conf import (
+    TP_CODIGO_MEDIDA_REDUZIDO,
+    TP_CTE,
+    TP_ICMS,
+    TP_MODAL,
+    TP_SERVICO,
+    TP_TOMADOR,
+    URL,
+)
+from brazilfiscalreport.dacte.generate_qrcode import draw_qr_code
 from brazilfiscalreport.utils import (
     format_cep,
     format_cpf_cnpj,
@@ -12,17 +23,21 @@ from brazilfiscalreport.utils import (
     format_phone,
     get_tag_text,
 )
-from brazilfiscalreport.dacte.config import DacteConfig, ReceiptPosition
-from brazilfiscalreport.dacte.dacte_conf import (
-    TP_MODAL,
-    TP_TOMADOR,
-    TP_CTE,
-    TP_SERVICO,
-    TP_CODIGO_MEDIDA_REDUZIDO,
-    TP_ICMS,
-    URL,
-)
-from brazilfiscalreport.dacte.generate_qrcode import draw_qr_code
+from brazilfiscalreport.xfpdf import xFPDF
+
+
+@dataclass
+class DacteOSLayout:
+    """Layout specification for DACTE OS PDF generation."""
+
+    receipt_height: float = 17 * mm
+    header_height: float = 70 * mm
+    percurso_height: float = 14 * mm
+    tomador_height: float = 24 * mm
+    service_height: float = 48 * mm
+    documents_height: float = 37 * mm
+    modal_height: float = 26 * mm
+    footer_height: float = 8 * mm
 
 
 def find_text(element, xpath, namespace=None):
@@ -50,9 +65,10 @@ class DacteOS(xFPDF):
     XML structures and layout found in DACTE OS.
     """
 
-    def __init__(self, xml_content, config: DacteConfig = None):
+    def __init__(self, xml_content, config: DacteConfig = None, *, layout: DacteOSLayout | None = None):
         super().__init__(unit="mm", format="A4")
         config = config if config is not None else DacteConfig()
+        self.layout = layout if layout is not None else DacteOSLayout()
         self.set_margins(
             left=config.margins.left, top=config.margins.top, right=config.margins.right
         )
@@ -248,7 +264,7 @@ class DacteOS(xFPDF):
     def _draw_receipt_section(self):
         # This is the top receipt part on the DACTE OS
         y_pos = self.t_margin
-        box_h = 17 * mm
+        box_h = self.layout.receipt_height
 
         self.c.rect(self.l_margin, y_pos, self.epw, box_h)
 
@@ -307,6 +323,7 @@ class DacteOS(xFPDF):
     def _draw_header_section(self):
         x_margin = self.l_margin
         y_pos = self.y  # Start from current Y after receipt
+        header_height = self.layout.header_height
 
         # Company Header (TSA TRANSPORTE EXECUTIVO LTDA)
         self.c.rect(x_margin, y_pos, self.epw / 2 - 2 * mm, 33 * mm)  # Left box for emitter info
@@ -381,7 +398,7 @@ class DacteOS(xFPDF):
                     align='L')
 
         # Access Key, Protocol, and QR Code Area
-        y_pos_key_qr = y_pos + 35 * mm
+        y_pos_key_qr = y_pos + header_height - 35 * mm
         self.c.rect(x_margin, y_pos_key_qr, self.epw, 35 * mm)  # Box for key and QR code area
 
         self.c.set_font(self.default_font, style='B', size=8)
@@ -463,7 +480,7 @@ class DacteOS(xFPDF):
         x_margin = self.l_margin
         y_pos = self.y  # Start from current Y
 
-        self.c.rect(x_margin, y_pos, self.epw, 24 * mm)  # Main box for Tomador
+        self.c.rect(x_margin, y_pos, self.epw, self.layout.tomador_height)  # Main box for Tomador
 
         self.c.set_font(self.default_font, style='B', size=8)
         self.c.set_xy(x_margin + 2 * mm, y_pos + 2 * mm)
@@ -492,7 +509,7 @@ class DacteOS(xFPDF):
         self.c.set_xy(x_margin + 2 * mm, y_pos + 22 * mm)
         self.c.cell(w=190 * mm, h=4 * mm, text=address_line_3, align='L')
 
-        self.y = y_pos + 24 * mm + 2 * mm  # Update current Y
+        self.y = y_pos + self.layout.tomador_height + 2 * mm  # Update current Y
 
     def _draw_service_info_and_values(self):
         x_margin = self.l_margin
@@ -605,7 +622,7 @@ class DacteOS(xFPDF):
         x_margin = self.l_margin
         y_pos = self.y  # Start from current Y
 
-        self.c.rect(x_margin, y_pos, self.epw, 25 * mm)  # Box for documents
+        self.c.rect(x_margin, y_pos, self.epw, self.layout.documents_height)  # Box for documents
         self.c.set_font(self.default_font, style='B', size=8)
         self.c.set_xy(x_margin + 2 * mm, y_pos + 2 * mm)
         self.c.cell(w=100 * mm, h=4 * mm, text="DOCUMENTOS ORIGINÁRIOS", align='L')
@@ -616,9 +633,9 @@ class DacteOS(xFPDF):
         doc_col3_width = 35 * mm  # Série/Nro. Documento
 
         current_x = x_margin
-        self.c.line(current_x + doc_col1_width, y_pos, current_x + doc_col1_width, y_pos + 25 * mm)
+        self.c.line(current_x + doc_col1_width, y_pos, current_x + doc_col1_width, y_pos + self.layout.documents_height)
         self.c.line(current_x + doc_col1_width + doc_col2_width, y_pos, current_x + doc_col1_width + doc_col2_width,
-                    y_pos + 25 * mm)
+                    y_pos + self.layout.documents_height)
 
         # Headers for document columns
         self.c.set_font(self.default_font, size=7)
@@ -649,7 +666,7 @@ class DacteOS(xFPDF):
             self.c.set_xy(x_margin + doc_col1_width + doc_col2_width + 2 * mm, current_doc_y)
             self.c.cell(w=doc_col3_width - 2 * mm, h=4 * mm, text=f"{serie_doc}/{formatted_nro_doc}", align='L')
 
-        y_pos_obs = y_pos + 25 * mm + 2 * mm  # Move down
+        y_pos_obs = y_pos + self.layout.documents_height + 2 * mm  # Move down
         self.c.rect(x_margin, y_pos_obs, self.epw, 10 * mm)  # Box for observations
         self.c.set_font(self.default_font, style='B', size=8)
         self.c.set_xy(x_margin + 2 * mm, y_pos_obs + 2 * mm)
@@ -673,7 +690,7 @@ class DacteOS(xFPDF):
         x_margin = self.l_margin
         y_pos = self.y  # Start from current Y
 
-        self.c.rect(x_margin, y_pos, self.epw, 18 * mm)  # Box for modal specific data
+        self.c.rect(x_margin, y_pos, self.epw, self.layout.modal_height)  # Box for modal specific data
         self.c.set_font(self.default_font, style='B', size=8)
         self.c.set_xy(x_margin + 2 * mm, y_pos + 2 * mm)
         self.c.cell(w=100 * mm, h=4 * mm, text="DADOS ESPECÍFICOS DO MODAL RODOVIÁRIO", align='L')
@@ -693,13 +710,13 @@ class DacteOS(xFPDF):
         self.c.cell(w=100 * mm, h=4 * mm, text="", align='L')  # No value provided in XML snippet
 
         # "USO EXCLUSIVO DO EMISSOR DO CT-E" footer for this section
-        y_pos_footer = y_pos + 20 * mm
-        self.c.rect(x_margin, y_pos_footer, self.epw, 8 * mm)
+        y_pos_footer = y_pos + self.layout.modal_height + 2 * mm
+        self.c.rect(x_margin, y_pos_footer, self.epw, self.layout.footer_height)
         self.c.set_font(self.default_font, style='B', size=8)
         self.c.set_xy(x_margin + 2 * mm, y_pos_footer + 3 * mm)
         self.c.cell(w=100 * mm, h=4 * mm, text="USO EXCLUSIVO DO EMISSOR DO CT-E", align='L')
 
-        self.y = y_pos_footer + 8 * mm + 2 * mm  # Update current Y
+        self.y = y_pos_footer + self.layout.footer_height + 2 * mm  # Update current Y
 
     def _draw_footer_declaration(self):
         x_margin = self.l_margin
