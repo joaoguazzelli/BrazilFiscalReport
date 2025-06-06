@@ -3,8 +3,8 @@ from .config import (
     DecimalConfig,
     FontType,
     Margins,
-    ReceiptPosition,
     ModalType,
+    ReceiptPosition,
 )
 from .dacte import Dacte
 from .dacteos import DacteOS

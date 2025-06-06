@@ -1,4 +1,5 @@
 import pytest
+
 from brazilfiscalreport.dacte.dacteos import DacteOS
 from tests.conftest import assert_pdf_equal, get_pdf_output_path
 
