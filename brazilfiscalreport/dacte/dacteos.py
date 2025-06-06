@@ -1,20 +1,10 @@
-import re
 import xml.etree.ElementTree as ET
+import re
 from datetime import datetime
 
 from reportlab.lib.units import mm
 
-from brazilfiscalreport.dacte.config import DacteConfig, ReceiptPosition
-from brazilfiscalreport.dacte.dacte_conf import (
-    TP_CODIGO_MEDIDA_REDUZIDO,
-    TP_CTE,
-    TP_ICMS,
-    TP_MODAL,
-    TP_SERVICO,
-    TP_TOMADOR,
-    URL,
-)
-from brazilfiscalreport.dacte.generate_qrcode import draw_qr_code
+from brazilfiscalreport.xfpdf import xFPDF
 from brazilfiscalreport.utils import (
     format_cep,
     format_cpf_cnpj,
@@ -22,7 +12,17 @@ from brazilfiscalreport.utils import (
     format_phone,
     get_tag_text,
 )
-from brazilfiscalreport.xfpdf import xFPDF
+from brazilfiscalreport.dacte.config import DacteConfig, ReceiptPosition
+from brazilfiscalreport.dacte.dacte_conf import (
+    TP_MODAL,
+    TP_TOMADOR,
+    TP_CTE,
+    TP_SERVICO,
+    TP_CODIGO_MEDIDA_REDUZIDO,
+    TP_ICMS,
+    URL,
+)
+from brazilfiscalreport.dacte.generate_qrcode import draw_qr_code
 
 
 def find_text(element, xpath, namespace=None):
@@ -244,9 +244,6 @@ class DacteOS(xFPDF):
 
         # Watermark (should not appear for production/authorized documents for this XML)
         self._draw_void_watermark_conditional()
-
-        # Experimental: overlay layout from response.html if available
-        self._draw_response_template()
 
     def _draw_receipt_section(self):
         # This is the top receipt part on the DACTE OS
@@ -767,34 +764,5 @@ class DacteOS(xFPDF):
 
     def _add_new_page(self, config):
         pass
-
-    def _draw_response_template(self):
-        """Overlay text content from the response.html SVG template."""
-        import os
-        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "response.html")
-        if not os.path.exists(template_path):
-            return
-
-        try:
-            with open(template_path, encoding="utf8") as f:
-                html = f.read()
-        except OSError:
-            return
-
-        texts = re.findall(
-            r"<text[^>]*transform=\"matrix\(1,0,0,-1,([0-9.]+),([0-9.]+)\)\"[^>]*>(.*?)</text>",
-            html,
-            flags=re.S,
-        )
-        scale = 1 / 3.78  # Convert SVG units to mm approximately
-        for x_px, y_px, content in texts:
-            text = re.sub("<[^>]+>", "", content).strip()
-            if not text:
-                continue
-            x = float(x_px) * scale
-            y = self.h - float(y_px) * scale
-            self.set_xy(x, y)
-            self.set_font(self.default_font, size=7)
-            self.cell(0, 3, txt=text)
 
 
